@@ -1,0 +1,12 @@
+{
+    "APP_BASE_URL": "https://localhost:3002",
+    "SAGE_ID_URL": "https://id-shadow.sage.com",
+    "CLIENT_ID": "PkE4eoLtMhCMmDhDJPbYPSUuRPTXS4Tf",
+    "REACT_APP_API_BASE_URL": "https://api-qa.network-eng.sage.com",
+    "REACT_APP_NETWORK_BASE_URL": "https://qa.network-eng.sage.com",
+    "ADDIN_MANIFEST_ID": "cce34bb1-409b-4e4f-9fff-37439ef9cacf",
+    "ADDIN_APP_NAME": "Sage Connect Local",
+    "ADDIN_APP_NAME_SHORT": "sage-connect-add-in-local",
+    "ADDIN_APP_VERSION": "1.0.1",
+    "SAGE_ID_AUDIENCE": "snet-dev/network/api"
+}
