@@ -1,18 +1,22 @@
 /* global Office console */
 
-export async function insertText(text: string) {
+export async function insertText(text: string): Promise<void> {
   // Write text to the cursor point in the compose surface.
-  try {
-    Office.context.mailbox.item?.body.setSelectedDataAsync(
-      text,
-      { coercionType: Office.CoercionType.Text },
-      (asyncResult: Office.AsyncResult<void>) => {
-        if (asyncResult.status === Office.AsyncResultStatus.Failed) {
-          throw asyncResult.error.message;
+  return new Promise((resolve, reject) => {
+    try {
+      Office.context.mailbox.item?.body.setSelectedDataAsync(
+        text,
+        { coercionType: Office.CoercionType.Text },
+        (asyncResult: Office.AsyncResult<void>) => {
+          if (asyncResult.status === Office.AsyncResultStatus.Failed) {
+            reject(new Error(asyncResult.error.message));
+          } else {
+            resolve();
+          }
         }
-      }
-    );
-  } catch (error) {
-    console.log("Error: " + error);
-  }
+      );
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
+  });
 }
