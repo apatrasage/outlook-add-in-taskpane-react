@@ -176,6 +176,7 @@
           <bt:Url id="Commands.Url" DefaultValue="https://localhost:3002/commands.html" />
           <bt:Url id="JSRuntime.Url" DefaultValue="https://localhost:3002/app.js" />
           <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3002/taskpane.html"/>
+          <bt:Url id="Dialog.Url" DefaultValue="https://localhost:3002/dialog.html"/>
         </bt:Urls>
         <bt:ShortStrings>
           <bt:String id="GroupLabel" DefaultValue="outlook-b777"/>

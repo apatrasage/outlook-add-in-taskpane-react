@@ -9,14 +9,24 @@ interface AppProps {
 }
 
 const useStyles = makeStyles({
-  root: {
+  dialogButton: {
+    margin: "1rem",
+    padding: "0.5rem 1rem",
+  },
+  rootDynamicBgBlue: {
     minHeight: "100vh",
+    backgroundColor: "#E6F7FF",
+  },
+  rootDynamicBgWhite: {
+    minHeight: "100vh",
+    backgroundColor: "white",
   },
 });
 
 const App: React.FC<AppProps> = (_props: AppProps) => {
   const styles = useStyles();
   const [bgColor, setBgColor] = React.useState<string>("white");
+  const [dialogOpen, setDialogOpen] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     const item = Office.context.mailbox.item;
@@ -97,9 +107,54 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
     }
   }, []);
 
+  /**
+   * Opens an Office dialog using Office.js Dialog API
+   */
+  const openDialog = async () => {
+    const dialogUrl = `${window.location.origin}/dialog.html`;
+    console.log("Opening dialog at URL:", dialogUrl);
+    Office.context.ui.displayDialogAsync(
+      dialogUrl,
+      { height: 40, width: 30, displayInIframe: true },
+      (result) => {
+        if (result.status === Office.AsyncResultStatus.Succeeded) {
+          const dialog = result.value;
+          setDialogOpen(true);
+          dialog.addEventHandler(Office.EventType.DialogMessageReceived, (arg: any) => {
+            // Handle message from dialog
+            if ("message" in arg) {
+              console.log("Dialog message received:", arg.message);
+            } else {
+              console.log("Dialog event received:", arg);
+            }
+            dialog.close();
+            setDialogOpen(false);
+          });
+          dialog.addEventHandler(Office.EventType.DialogEventReceived, (event) => {
+            // Handle dialog closed or error
+            console.log("Dialog event:", event);
+            setDialogOpen(false);
+          });
+        } else {
+          // Handle error
+          console.error("Failed to open dialog:", result.error);
+        }
+      }
+    );
+  };
+
   return (
-    <div className={styles.root} style={{ backgroundColor: bgColor }}>
+    <div className={bgColor === "#E6F7FF" ? styles.rootDynamicBgBlue : styles.rootDynamicBgWhite}>
       <TextInsertion insertText={insertText} />
+      {/* Button to open dialog */}
+      <button
+        type="button"
+        onClick={openDialog}
+        aria-label="Open dialog"
+        className={styles.dialogButton}
+      >
+        Open Dialog
+      </button>
     </div>
   );
 };
