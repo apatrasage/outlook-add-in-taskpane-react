@@ -1,6 +1,6 @@
 import * as React from "react";
 import TextInsertion from "./TextInsertion";
-import { makeStyles } from "@fluentui/react-components";
+import { makeStyles, Button } from "@fluentui/react-components";
 import { Ribbon24Regular, LockOpen24Regular, DesignIdeas24Regular } from "@fluentui/react-icons";
 import { insertText } from "../taskpane";
 
@@ -108,18 +108,25 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
   }, []);
 
   /**
-   * Opens an Office dialog using Office.js Dialog API
+   * Opens an Office dialog using Office.js Dialog API with 12007 error handling
+   * Implements the Microsoft recommended retry pattern for dialog opening
    */
-  const openDialog = async () => {
+  const openDialogWithRetry = React.useCallback((retryCount: number = 0): void => {
+    const maxRetries = 5;
+    const retryDelay = 100; // 100ms delay between retries
+    
     const dialogUrl = `${window.location.origin}/dialog.html`;
-    console.log("Opening dialog at URL:", dialogUrl);
+    
+    console.log(`Opening dialog at URL: ${dialogUrl} (attempt ${retryCount + 1})`);
+    
     Office.context.ui.displayDialogAsync(
       dialogUrl,
       { height: 40, width: 30, displayInIframe: true },
-      (result) => {
+      (result: Office.AsyncResult<Office.Dialog>) => {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
           const dialog = result.value;
           setDialogOpen(true);
+          
           dialog.addEventHandler(Office.EventType.DialogMessageReceived, (arg: any) => {
             // Handle message from dialog
             if ("message" in arg) {
@@ -130,31 +137,61 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
             dialog.close();
             setDialogOpen(false);
           });
+          
           dialog.addEventHandler(Office.EventType.DialogEventReceived, (event) => {
             // Handle dialog closed or error
             console.log("Dialog event:", event);
             setDialogOpen(false);
           });
         } else {
-          // Handle error
-          console.error("Failed to open dialog:", result.error);
+          // Check if this is the 12007 error (dialog already open)
+          if (result.error.code === 12007) {
+            console.warn(`Dialog open failed with error 12007 (attempt ${retryCount + 1}). Retrying...`);
+            
+            if (retryCount < maxRetries) {
+              // Retry after a short delay
+              setTimeout(() => {
+                openDialogWithRetry(retryCount + 1);
+              }, retryDelay);
+            } else {
+              console.error(`Failed to open dialog after ${maxRetries} attempts. Error:`, result.error);
+              setDialogOpen(false);
+            }
+          } else {
+            // Handle other errors
+            console.error("Failed to open dialog:", result.error);
+            setDialogOpen(false);
+          }
         }
       }
     );
-  };
+  }, []);
+
+  /**
+   * Public method to open dialog - calls the retry implementation
+   */
+  const openDialog = React.useCallback((): void => {
+    if (dialogOpen) {
+      console.warn("Dialog is already open, ignoring request");
+      return;
+    }
+    
+    openDialogWithRetry(0);
+  }, [dialogOpen, openDialogWithRetry]);
 
   return (
     <div className={bgColor === "#E6F7FF" ? styles.rootDynamicBgBlue : styles.rootDynamicBgWhite}>
       <TextInsertion insertText={insertText} />
-      {/* Button to open dialog */}
-      <button
-        type="button"
+      {/* Button to open dialog with improved accessibility */}
+      <Button
+        appearance="primary"
         onClick={openDialog}
-        aria-label="Open dialog"
+        disabled={dialogOpen}
+        aria-label="Open dialog window"
         className={styles.dialogButton}
       >
-        Open Dialog
-      </button>
+        {dialogOpen ? "Dialog Open..." : "Open Dialog"}
+      </Button>
     </div>
   );
 };
