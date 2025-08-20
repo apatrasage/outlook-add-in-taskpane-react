@@ -1,6 +1,6 @@
 import * as React from "react";
 import TextInsertion from "./TextInsertion";
-import { makeStyles, Button } from "@fluentui/react-components";
+import { makeStyles, Button, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions } from "@fluentui/react-components";
 import { Ribbon24Regular, LockOpen24Regular, DesignIdeas24Regular } from "@fluentui/react-icons";
 import { insertText } from "../taskpane";
 
@@ -27,6 +27,8 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
   const styles = useStyles();
   const [bgColor, setBgColor] = React.useState<string>("white");
   const [dialogOpen, setDialogOpen] = React.useState<boolean>(false);
+  const [errorOpen, setErrorOpen] = React.useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = React.useState<string>("");
 
   React.useEffect(() => {
     const item = Office.context.mailbox.item;
@@ -108,17 +110,14 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
   }, []);
 
   /**
-   * Opens an Office dialog using Office.js Dialog API with 12007 error handling
-   * Implements the Microsoft recommended retry pattern for dialog opening
+   * Opens an Office dialog using Office.js Dialog API
+   * If error 12007 occurs, show an error dialog with a Reload option; no retries.
    */
-  const openDialogWithRetry = React.useCallback((retryCount: number = 0): void => {
-    const maxRetries = 5;
-    const retryDelay = 100; // 100ms delay between retries
-    
+  const openDialogWithRetry = React.useCallback((): void => {
     const dialogUrl = `${window.location.origin}/dialog.html`;
-    
-    console.log(`Opening dialog at URL: ${dialogUrl} (attempt ${retryCount + 1})`);
-    
+
+    console.log(`Opening dialog at URL: ${dialogUrl}`);
+
     Office.context.ui.displayDialogAsync(
       dialogUrl,
       { height: 40, width: 30, displayInIframe: true },
@@ -126,37 +125,32 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
           const dialog = result.value;
           setDialogOpen(true);
-          
+
           dialog.addEventHandler(Office.EventType.DialogMessageReceived, (arg: any) => {
             // Handle message from dialog
             if ("message" in arg) {
-              console.log("Dialog message received:", arg.message);
+              console.log("Dialog message received:", (arg as any).message);
             } else {
               console.log("Dialog event received:", arg);
             }
             dialog.close();
             setDialogOpen(false);
           });
-          
+
           dialog.addEventHandler(Office.EventType.DialogEventReceived, (event) => {
             // Handle dialog closed or error
             console.log("Dialog event:", event);
             setDialogOpen(false);
           });
         } else {
-          // Check if this is the 12007 error (dialog already open)
-          if (result.error.code === 12007) {
-            console.warn(`Dialog open failed with error 12007 (attempt ${retryCount + 1}). Retrying...`);
-            
-            if (retryCount < maxRetries) {
-              // Retry after a short delay
-              setTimeout(() => {
-                openDialogWithRetry(retryCount + 1);
-              }, retryDelay);
-            } else {
-              console.error(`Failed to open dialog after ${maxRetries} attempts. Error:`, result.error);
-              setDialogOpen(false);
-            }
+          // Show error prompt for 12007 (dialog already open); do not retry
+          if ((result.error as Office.Error).code === 12007) {
+            console.warn("Dialog open failed with error 12007. Showing reload prompt.");
+            setDialogOpen(false);
+            setErrorMessage(
+              "We couldn't open the dialog because another dialog is already open. Please reload the task pane and try again."
+            );
+            setErrorOpen(true);
           } else {
             // Handle other errors
             console.error("Failed to open dialog:", result.error);
@@ -168,15 +162,15 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
   }, []);
 
   /**
-   * Public method to open dialog - calls the retry implementation
+   * Public method to open dialog - calls the (no-retry) implementation
    */
   const openDialog = React.useCallback((): void => {
     if (dialogOpen) {
       console.warn("Dialog is already open, ignoring request");
       return;
     }
-    
-    openDialogWithRetry(0);
+
+    openDialogWithRetry();
   }, [dialogOpen, openDialogWithRetry]);
 
   return (
@@ -192,6 +186,26 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
       >
         {dialogOpen ? "Dialog Open..." : "Open Dialog"}
       </Button>
+
+      {/* Error dialog prompting to reload */}
+      <Dialog open={errorOpen} onOpenChange={(_, data) => setErrorOpen(!!data.open)}>
+        <DialogSurface aria-describedby="dialog-error-desc">
+          <DialogBody>
+            <DialogTitle>Problem opening dialog</DialogTitle>
+            <DialogContent id="dialog-error-desc">
+              {errorMessage || "An unexpected error occurred while opening the dialog."}
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="secondary" onClick={() => setErrorOpen(false)}>
+                Close
+              </Button>
+              <Button appearance="primary" onClick={() => window.location.reload()}>
+                Reload
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </div>
   );
 };
