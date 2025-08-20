@@ -10,7 +10,6 @@ import {
   DialogContent,
   DialogActions,
 } from "@fluentui/react-components";
-import { Ribbon24Regular, LockOpen24Regular, DesignIdeas24Regular } from "@fluentui/react-icons";
 import { insertText } from "../taskpane";
 
 interface AppProps {
@@ -38,6 +37,7 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
   const [dialogOpen, setDialogOpen] = React.useState<boolean>(false);
   const [errorOpen, setErrorOpen] = React.useState<boolean>(false);
   const [errorMessage, setErrorMessage] = React.useState<string>("");
+  const dialogRef = React.useRef<Office.Dialog | null>(null);
 
   React.useEffect(() => {
     const item = Office.context.mailbox.item;
@@ -84,15 +84,48 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
       }
     }
 
+    // MSFT workaround: Handle dialog cleanup on navigation events
+    const handlePopState = () => {
+      console.log("PopState event detected, cleaning up dialog");
+      if (dialogRef.current) {
+        try {
+          dialogRef.current.close();
+          dialogRef.current = null;
+          setDialogOpen(false);
+        } catch (error) {
+          console.warn("Error closing dialog on popstate:", error);
+        }
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      console.log("BeforeUnload event detected, cleaning up dialog");
+      if (dialogRef.current) {
+        try {
+          dialogRef.current.close();
+          dialogRef.current = null;
+          setDialogOpen(false);
+        } catch (error) {
+          console.warn("Error closing dialog on beforeunload:", error);
+        }
+      }
+    };
+
     Office.onReady((info) => {
       if (info.host === Office.HostType.Outlook) {
         console.log("Taskpane is ready and listening for commands.");
         window.addEventListener("storage", handleStorageEvent);
+
+        // Add navigation event listeners as per MSFT workaround
+        window.addEventListener("popstate", handlePopState);
+        window.addEventListener("beforeunload", handleBeforeUnload);
       }
     });
 
     return () => {
       window.removeEventListener("storage", handleStorageEvent);
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, []);
 
@@ -133,6 +166,7 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
       (result: Office.AsyncResult<Office.Dialog>) => {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
           const dialog = result.value;
+          dialogRef.current = dialog; // Store dialog reference for cleanup
           setDialogOpen(true);
 
           dialog.addEventHandler(Office.EventType.DialogMessageReceived, (arg: any) => {
@@ -143,12 +177,14 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
               console.log("Dialog event received:", arg);
             }
             dialog.close();
+            dialogRef.current = null; // Clear reference
             setDialogOpen(false);
           });
 
           dialog.addEventHandler(Office.EventType.DialogEventReceived, (event) => {
             // Handle dialog closed or error
             console.log("Dialog event:", event);
+            dialogRef.current = null; // Clear reference
             setDialogOpen(false);
           });
         } else {
@@ -177,6 +213,18 @@ const App: React.FC<AppProps> = (_props: AppProps) => {
     if (dialogOpen) {
       console.warn("Dialog is already open, ignoring request");
       return;
+    }
+
+    // Clean up any stale dialog reference before opening new one
+    if (dialogRef.current) {
+      console.warn("Found stale dialog reference, cleaning up before opening new dialog");
+      try {
+        dialogRef.current.close();
+      } catch (error) {
+        console.warn("Error closing stale dialog:", error);
+      }
+      dialogRef.current = null;
+      setDialogOpen(false);
     }
 
     openDialogWithRetry();
